@@ -127,7 +127,3 @@ Du brauchst **Android 8.0 oder neuer**. Neue Versionen findest du ebenfalls unte
 ## 💬 Fragen oder einen Fehler gefunden?
 
 Schreib gern ein **Issue** hier im Repository. Wenn etwas nicht funktioniert, helfen deine Android-Version und eine kurze Beschreibung der Schritte. Bei Problemen mit dem Scanner kannst du einen anonymisierten Ausschnitt des Arbeitsblatts ergänzen.
-
-## Fragen oder einen Fehler gefunden?
-
-Schreib gern ein **Issue** hier im Repository. Wenn etwas nicht funktioniert, helfen deine Android-Version und eine kurze Beschreibung der Schritte. Bei Problemen mit dem Scanner kannst du einen anonymisierten Ausschnitt des Arbeitsblatts ergänzen.
