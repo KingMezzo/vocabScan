@@ -1,0 +1,10 @@
+{
+  "versionCode": 15,
+  "versionName": "0.13.0",
+  "apkUrl": "https://github.com/KingMezzo/vocabScan/releases/download/v0.13.0/vocabscan.apk",
+  "changelog": [
+    "Sprachlisten unterstützen zwei frei wählbare Sprachen, auch gleiche Sprachkombinationen.",
+    "Die App prüft beim Start höchstens einmal täglich auf Updates. In den Einstellungen kannst du die Suche selbst starten.",
+    "Nach einem Update werden die Neuerungen einmalig angezeigt."
+  ]
+}
