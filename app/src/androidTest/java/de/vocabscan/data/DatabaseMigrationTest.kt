@@ -43,12 +43,14 @@ class DatabaseMigrationTest {
             old.version = 8
         }
         val migrated = Room.databaseBuilder(context, VocabDatabase::class.java, name)
-            .addMigrations(VocabDatabase.MIGRATION_8_9, VocabDatabase.MIGRATION_9_10, VocabDatabase.MIGRATION_10_11).build()
+            .addMigrations(VocabDatabase.MIGRATION_8_9, VocabDatabase.MIGRATION_9_10, VocabDatabase.MIGRATION_10_11, VocabDatabase.MIGRATION_11_12).build()
         try {
             val dao = migrated.vocabDao()
-            val folder = dao.allFolders().single()
+            val folder = dao.allFolders().single { !it.isArchived }
+            val archiveFolder = dao.allFolders().single { it.isArchived }
+            assertEquals(folder.name, archiveFolder.name)
             assertEquals("École", folder.name)
-            assertEquals(listOf(folder.id, folder.id, null), dao.allDecks().map { it.folderId })
+            assertEquals(listOf(folder.id, archiveFolder.id, null), dao.allDecks().map { it.folderId })
             assertEquals(true, dao.deckById("b")!!.isArchived)
             assertEquals(true, dao.wordById("w")!!.isFavorite)
             assertEquals("Notiz", dao.wordById("w")!!.note)
@@ -57,7 +59,7 @@ class DatabaseMigrationTest {
             assertEquals("one.img", dao.allScanPages().single().fileName)
             VocabRepository(migrated).deleteFolder(folder.id)
             assertEquals(3, dao.allDecks().size)
-            assertEquals(null, dao.deckById("b")!!.folderId)
+            assertEquals(archiveFolder.id, dao.deckById("b")!!.folderId)
             assertEquals(1, dao.allLogs().size)
             migrated.openHelper.writableDatabase.query("PRAGMA foreign_key_check").use { assertEquals(0, it.count) }
         } finally { migrated.close(); context.deleteDatabase(name) }
@@ -94,17 +96,19 @@ class DatabaseMigrationTest {
             old.version = 9
         }
         val migrated = Room.databaseBuilder(context, VocabDatabase::class.java, name)
-            .addMigrations(VocabDatabase.MIGRATION_8_9, VocabDatabase.MIGRATION_9_10, VocabDatabase.MIGRATION_10_11).build()
+            .addMigrations(VocabDatabase.MIGRATION_8_9, VocabDatabase.MIGRATION_9_10, VocabDatabase.MIGRATION_10_11, VocabDatabase.MIGRATION_11_12).build()
         try {
             val dao = migrated.vocabDao()
-            val folder = dao.allFolders().single()
+            val folder = dao.allFolders().single { !it.isArchived }
+            val archiveFolder = dao.allFolders().single { it.isArchived }
+            assertEquals(folder.name, archiveFolder.name)
             assertEquals("École", folder.name)
             assertTrue(dao.allDecks().all { it.type == DeckType.SPRACHE })
             val flashId = VocabRepository(migrated).createDeck("Recht", StudyLanguage.ENGLISH, type = DeckType.LERNKARTEN)
             assertEquals("", dao.deckById(flashId)!!.language)
             assertEquals(DeckType.LERNKARTEN, dao.deckById(flashId)!!.type)
             dao.deleteDeck(dao.deckById(flashId)!!)
-            assertEquals(listOf(folder.id, folder.id, null), dao.allDecks().map { it.folderId })
+            assertEquals(listOf(folder.id, archiveFolder.id, null), dao.allDecks().map { it.folderId })
             assertEquals(true, dao.deckById("b")!!.isArchived)
             assertEquals(true, dao.wordById("w")!!.isFavorite)
             assertEquals("Notiz", dao.wordById("w")!!.note)
@@ -113,7 +117,7 @@ class DatabaseMigrationTest {
             assertEquals("one.img", dao.allScanPages().single().fileName)
             VocabRepository(migrated).deleteFolder(folder.id)
             assertEquals(3, dao.allDecks().size)
-            assertEquals(null, dao.deckById("b")!!.folderId)
+            assertEquals(archiveFolder.id, dao.deckById("b")!!.folderId)
             assertEquals(1, dao.allLogs().size)
             migrated.openHelper.writableDatabase.query("PRAGMA foreign_key_check").use { assertEquals(0, it.count) }
         } finally { migrated.close(); context.deleteDatabase(name) }
@@ -149,7 +153,7 @@ class DatabaseMigrationTest {
             old.version = 5
         }
         val migrated = Room.databaseBuilder(context, VocabDatabase::class.java, name)
-            .addMigrations(VocabDatabase.MIGRATION_5_6, VocabDatabase.MIGRATION_6_7, VocabDatabase.MIGRATION_7_8, VocabDatabase.MIGRATION_8_9, VocabDatabase.MIGRATION_9_10, VocabDatabase.MIGRATION_10_11).build()
+            .addMigrations(VocabDatabase.MIGRATION_5_6, VocabDatabase.MIGRATION_6_7, VocabDatabase.MIGRATION_7_8, VocabDatabase.MIGRATION_8_9, VocabDatabase.MIGRATION_9_10, VocabDatabase.MIGRATION_10_11, VocabDatabase.MIGRATION_11_12).build()
         try {
             val words = migrated.vocabDao().wordsForDeck("d").associateBy { it.id }
             assertEquals(null, words.getValue("manual").scanGroupId)
@@ -190,7 +194,7 @@ class DatabaseMigrationTest {
         }
         val migrated = Room.databaseBuilder(context, VocabDatabase::class.java, name)
             .addMigrations(VocabDatabase.MIGRATION_1_2, VocabDatabase.MIGRATION_2_3, VocabDatabase.MIGRATION_3_4,
-                VocabDatabase.MIGRATION_4_5, VocabDatabase.MIGRATION_5_6, VocabDatabase.MIGRATION_6_7, VocabDatabase.MIGRATION_7_8, VocabDatabase.MIGRATION_8_9, VocabDatabase.MIGRATION_9_10, VocabDatabase.MIGRATION_10_11).build()
+                VocabDatabase.MIGRATION_4_5, VocabDatabase.MIGRATION_5_6, VocabDatabase.MIGRATION_6_7, VocabDatabase.MIGRATION_7_8, VocabDatabase.MIGRATION_8_9, VocabDatabase.MIGRATION_9_10, VocabDatabase.MIGRATION_10_11, VocabDatabase.MIGRATION_11_12).build()
         try {
             assertEquals(7, migrated.vocabDao().allProgress().single().reviews)
             assertEquals(0, migrated.vocabDao().allScanPages().size)
@@ -221,7 +225,7 @@ class DatabaseMigrationTest {
         }
         val migrated = Room.databaseBuilder(context, VocabDatabase::class.java, name)
             .addMigrations(VocabDatabase.MIGRATION_1_2, VocabDatabase.MIGRATION_2_3, VocabDatabase.MIGRATION_3_4,
-                VocabDatabase.MIGRATION_4_5, VocabDatabase.MIGRATION_5_6, VocabDatabase.MIGRATION_6_7, VocabDatabase.MIGRATION_7_8, VocabDatabase.MIGRATION_8_9, VocabDatabase.MIGRATION_9_10, VocabDatabase.MIGRATION_10_11).build()
+                VocabDatabase.MIGRATION_4_5, VocabDatabase.MIGRATION_5_6, VocabDatabase.MIGRATION_6_7, VocabDatabase.MIGRATION_7_8, VocabDatabase.MIGRATION_8_9, VocabDatabase.MIGRATION_9_10, VocabDatabase.MIGRATION_10_11, VocabDatabase.MIGRATION_11_12).build()
         try {
             val deck = migrated.vocabDao().allDecks().single()
             val word = migrated.vocabDao().wordsForDeck(deck.id).single()

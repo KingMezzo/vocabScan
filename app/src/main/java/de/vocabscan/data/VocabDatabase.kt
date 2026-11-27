@@ -139,10 +139,24 @@ interface VocabDao {
     suspend fun deleteWord(word: Vocabulary)
 }
 
-@Database(entities = [Folder::class, Deck::class, Vocabulary::class, StudyProgress::class, ReviewLog::class, ScanPage::class], version = 11, exportSchema = true)
+@Database(entities = [Folder::class, Deck::class, Vocabulary::class, StudyProgress::class, ReviewLog::class, ScanPage::class], version = 12, exportSchema = true)
 abstract class VocabDatabase : RoomDatabase() {
     abstract fun vocabDao(): VocabDao
     companion object {
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE folders ADD COLUMN isArchived INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE folders ADD COLUMN parentId TEXT REFERENCES folders(id) ON UPDATE NO ACTION ON DELETE SET NULL")
+                db.execSQL("DROP INDEX index_folders_name")
+                db.execSQL("CREATE INDEX index_folders_parentId ON folders (parentId)")
+                db.execSQL("CREATE UNIQUE INDEX index_folders_isArchived_parentId_name ON folders (isArchived, parentId, name)")
+                // Clone shared legacy folders before redirecting archived lists. Learning data is untouched.
+                db.execSQL("""INSERT INTO folders (id, name, createdAt, isArchived, parentId)
+                    SELECT 'archive:' || id, name, createdAt, 1, NULL FROM folders
+                    WHERE id IN (SELECT folderId FROM decks WHERE isArchived = 1)""")
+                db.execSQL("UPDATE decks SET folderId = 'archive:' || folderId WHERE isArchived = 1 AND folderId IS NOT NULL")
+            }
+        }
         val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE decks ADD COLUMN targetLanguage TEXT NOT NULL DEFAULT 'de'")
@@ -231,6 +245,6 @@ abstract class VocabDatabase : RoomDatabase() {
 
         fun open(context: Context): VocabDatabase = Room.databaseBuilder(
             context.applicationContext, VocabDatabase::class.java, "vocabscan.db",
-        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11).build()
+        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12).build()
     }
 }

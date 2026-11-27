@@ -38,11 +38,14 @@ object LearningStatsCalculator {
     ): LearningStats {
         val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
         val progressByKey = progress.associateBy { it.wordId to it.direction }
-        val deckStats = decks.map { item ->
+        val activeDecks = decks.filterNot { it.deck.isArchived }
+        val activeWordIds = activeDecks.flatMap { it.words }.map { it.id }.toSet()
+        val activeLogs = logs.filter { it.wordId in activeWordIds }
+        val deckStats = activeDecks.map { item ->
             val keys = item.words.flatMap { word -> listOf(word.id to 0, word.id to 1) }
             DeckLearningStats(
                 item.deck.id, item.deck.name, item.deck.language,
-                due = if (item.deck.isArchived) 0 else keys.count { key -> FsrsScheduler.isDue(progressByKey[key]?.dueAt, now) },
+                due = keys.count { key -> FsrsScheduler.isDue(progressByKey[key]?.dueAt, now) },
                 studied = keys.count { key -> progressByKey.containsKey(key) },
                 total = keys.size,
                 archived = item.deck.isArchived,
@@ -51,22 +54,24 @@ object LearningStatsCalculator {
         }
         val dated = logs.map { it to Instant.ofEpochMilli(it.reviewedAt).atZone(zone).toLocalDate() }
         val counts = dated.groupingBy { it.second }.eachCount()
+        val activeDated = activeLogs.map { it to Instant.ofEpochMilli(it.reviewedAt).atZone(zone).toLocalDate() }
+        val activeCounts = activeDated.groupingBy { it.second }.eachCount()
         val week = (6L downTo 0L).map { offset ->
             val date = today.minusDays(offset)
             DailyReviews(date, counts[date] ?: 0)
         }
-        val activeDays = counts.keys
+        val activeDays = activeCounts.keys
         var cursor = if (today in activeDays) today else today.minusDays(1)
         var streak = 0
         while (cursor in activeDays) { streak++; cursor = cursor.minusDays(1) }
-        val recent = dated.filter { it.second >= today.minusDays(29) }
+        val recent = activeDated.filter { it.second >= today.minusDays(29) }
         val goodPercent = if (recent.isEmpty()) null else
             (100.0 * recent.count { it.first.rating >= ReviewRating.GOOD.grade } / recent.size).toInt()
         return LearningStats(
-            today = counts[today] ?: 0,
+            today = activeCounts[today] ?: 0,
             due = deckStats.sumOf { it.due },
             streak = streak,
-            totalReviews = logs.size,
+            totalReviews = activeLogs.size,
             studiedDirections = deckStats.sumOf { it.studied },
             totalDirections = deckStats.sumOf { it.total },
             goodOrEasyPercent = goodPercent,

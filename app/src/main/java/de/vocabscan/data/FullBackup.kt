@@ -85,7 +85,7 @@ class FullBackup(private val context: Context, private val repository: VocabRepo
                 }
             }
             val root = JSONObject(String(manifest ?: error("Manifest fehlt"), Charsets.UTF_8))
-            require(root.getInt("version") in 1..2) { "Diese Sicherungsversion wird nicht unterstützt" }
+            require(root.getInt("version") in 1..3) { "Diese Sicherungsversion wird nicht unterstützt" }
             val decoded = decode(root)
             val settings = root.getJSONObject("settings")
             val theme = ThemeMode.valueOf(settings.getString("theme"))
@@ -156,11 +156,12 @@ class FullBackup(private val context: Context, private val repository: VocabRepo
 
         private fun encode(data: FullSnapshot, images: Map<String, Pair<Long, String>>,
             theme: ThemeMode, reminders: Boolean, dailyGoal: Int) = JSONObject().apply {
-            put("version", 2)
+            put("version", 3)
             put("settings", JSONObject().put("theme", theme.name).put("reminders", reminders)
                 .put("dailyGoal", dailyGoal))
             put("folders", JSONArray().apply { data.folders.forEach { f -> put(JSONObject().apply {
                 put("id", f.id); put("name", f.name); put("createdAt", f.createdAt)
+                put("isArchived", f.isArchived); put("parentId", f.parentId)
             }) } })
             put("decks", JSONArray().apply { data.decks.forEach { d -> put(JSONObject().apply {
                 put("id", d.id); put("name", d.name); put("language", d.language); put("type", d.type.name); put("createdAt", d.createdAt)
@@ -195,10 +196,12 @@ class FullBackup(private val context: Context, private val repository: VocabRepo
                 (0 until a.length()).map { read(a.getJSONObject(it)) }
             }
             val folders = if (root.has("folders")) array("folders") {
-                Folder(it.getString("id"), it.getString("name").also { name -> require(name.isNotBlank() && name.length <= 80) }, it.getLong("createdAt"))
+                Folder(it.getString("id"), it.getString("name").also { name -> require(name.isNotBlank() && name.length <= 80) }, it.getLong("createdAt"),
+                    it.optBoolean("isArchived", false),
+                    it.optString("parentId").takeUnless { value -> value.isBlank() || value == "null" })
             } else emptyList()
             val decks = array("decks") { Deck(it.getString("id"), it.getString("name"), it.getString("language"), it.getLong("createdAt"),
-                it.optString("folder", "").also { folder -> require(folder.length <= 80) }, it.optBoolean("isArchived", false),
+                it.optString("folder", "").also { folder -> require(folder.length <= 2048) }, it.optBoolean("isArchived", false),
                 it.optString("folderId").takeUnless { value -> value.isBlank() || value == "null" },
                 DeckType.valueOf(it.optString("type", "SPRACHE")),
                 it.optString("targetLanguage", if (it.optString("type") == "LERNKARTEN") "" else "de")) }
@@ -218,8 +221,11 @@ class FullBackup(private val context: Context, private val repository: VocabRepo
                 pages.map { it.id }.toSet().size == pages.size && logs.map { it.id }.toSet().size == logs.size) { "Doppelte IDs im Archiv" }
             val deckIds = decks.map { it.id }.toSet()
             val folderIds = folders.map { it.id }.toSet()
-            require(folderIds.size == folders.size && folders.map { it.name }.distinct().size == folders.size &&
-                decks.all { it.folderId == null || it.folderId in folderIds }) { "Ungültige Ordner im Archiv" }
+            require(folderIds.size == folders.size && folders.map { Triple(it.isArchived, it.parentId, it.name) }.distinct().size == folders.size &&
+                folders.all { folder ->
+                    (folder.parentId == null || folders.any { it.id == folder.parentId && it.isArchived == folder.isArchived }) &&
+                        folderPath(folders, folder.id).firstOrNull()?.parentId == null
+                } && decks.all { it.folderId == null || it.folderId in folderIds }) { "Ungültige Ordner im Archiv" }
             require(decks.all { it.name.isNotBlank() && it.type.acceptsLanguages(it.language, it.targetLanguage) }) { "Ungültiger Listentyp oder Sprache" }
             val wordIds = words.map { it.id }.toSet()
             require(words.all { it.deckId in deckIds && it.term.isNotBlank() && it.translation.isNotBlank() } &&

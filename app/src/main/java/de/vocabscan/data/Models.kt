@@ -23,12 +23,31 @@ enum class StudyLanguage(val code: String, val label: String) {
     }
 }
 
-@Entity(tableName = "folders", indices = [Index(value = ["name"], unique = true)])
+@Entity(tableName = "folders", foreignKeys = [ForeignKey(
+    entity = Folder::class, parentColumns = ["id"], childColumns = ["parentId"],
+    onDelete = ForeignKey.SET_NULL,
+)], indices = [Index("parentId"), Index(value = ["isArchived", "parentId", "name"], unique = true)])
 data class Folder(
     @PrimaryKey val id: String,
     val name: String,
     val createdAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(defaultValue = "0") val isArchived: Boolean = false,
+    val parentId: String? = null,
 )
+
+/** Root-to-leaf path shared by navigation, archive transfers and exports. */
+fun folderPath(folders: List<Folder>, id: String?): List<Folder> {
+    val byId = folders.associateBy { it.id }
+    val path = mutableListOf<Folder>()
+    val visited = mutableSetOf<String>()
+    var current = id
+    while (current != null && visited.add(current)) {
+        val folder = byId[current] ?: break
+        path += folder
+        current = folder.parentId
+    }
+    return path.asReversed()
+}
 
 @Entity(tableName = "decks", foreignKeys = [ForeignKey(
     entity = Folder::class, parentColumns = ["id"], childColumns = ["folderId"],

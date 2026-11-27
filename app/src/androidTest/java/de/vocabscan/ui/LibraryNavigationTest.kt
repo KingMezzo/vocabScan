@@ -60,7 +60,7 @@ class LibraryNavigationTest {
         val folderId = runBlocking {
             repository.createFolder("Schule").also { id ->
                 repository.moveDeck(deckId, id)
-                repository.moveDeck(repository.fullSnapshot().decks.first { it.isArchived }.id, id)
+                repository.setDeckFolder(repository.fullSnapshot().decks.first { it.isArchived }.id, "Schule")
             }
         }
         compose.waitUntil(10_000) { model.folders.value.any { it.id == folderId } }

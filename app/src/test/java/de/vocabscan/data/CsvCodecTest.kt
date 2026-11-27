@@ -44,4 +44,13 @@ class CsvCodecTest {
         assertFalse(row.isArchived)
         assertEquals("scan-one", row.scanGroupId)
     }
+    @Test fun nestedPathsRoundTripWithIndependentArchiveFlags() {
+        val path = "Schule/" + "Englisch".repeat(10) + "/Unit 1"
+        val rows = listOf(
+            CsvRow("active", "Aktiv", "en", "book", "Buch", "", folder = path),
+            CsvRow("archived", "Archiv", "en", "house", "Haus", "", folder = path, isArchived = true),
+        )
+        assertEquals(rows, CsvCodec.decode(CsvCodec.encode(rows)))
+    }
+
 }

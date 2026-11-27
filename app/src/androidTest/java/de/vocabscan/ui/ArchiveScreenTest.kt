@@ -15,7 +15,7 @@ class ArchiveScreenTest {
     @get:Rule val compose = createComposeRule()
 
     @Test fun showsOnlyFoldersWithArchivedListsAndNeverAnIncorrectEmptyMessage() {
-        val folder = Folder("school", "Schule")
+        val folder = Folder("school", "Schule", isArchived = true)
         val data = LibraryContents(
             listOf(DeckWithVocabulary(Deck("list", "Unit 1", "en", folderId = folder.id, isArchived = true), emptyList())),
             listOf(folder, Folder("empty", "Leerer Ordner")), loading = false)

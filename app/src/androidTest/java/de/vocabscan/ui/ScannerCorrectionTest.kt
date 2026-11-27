@@ -80,7 +80,7 @@ class ScannerCorrectionTest {
     }
 
     @Test fun dragMergesRowsAndUndoRestoresOriginalPairs() {
-        val handle = compose.onNodeWithContentDescription("Zeile 1 zum Verbinden ziehen", useUnmergedTree = true)
+        val handle = compose.onNodeWithContentDescription("Zeile 1 zum Zusammenführen ziehen", useUnmergedTree = true)
         val sourceCenter = handle.fetchSemanticsNode().boundsInRoot.center
         val targetCenter = compose.onNodeWithText("house").fetchSemanticsNode().boundsInRoot.center
         handle.performTouchInput {
@@ -89,8 +89,8 @@ class ScannerCorrectionTest {
             moveTo(center + Offset(0f, targetCenter.y - sourceCenter.y), delayMillis = 400)
             up()
         }
-        compose.onNodeWithText("Zeilen verbinden?").assertIsDisplayed()
-        compose.onNodeWithText("Verbinden", substring = false).performClick()
+        compose.onNodeWithText("Aus zwei Zeilen wird ein Wortpaar").assertIsDisplayed()
+        compose.onNodeWithText("Zu einem Wortpaar zusammenführen", substring = false).performClick()
         compose.runOnIdle { assertEquals("apple house", model.state.value.draft!!.pairs.first().term) }
         compose.onNodeWithContentDescription("Korrektur rückgängig").performClick()
         compose.runOnIdle { assertEquals(listOf("apple", "house", "garden"), model.state.value.draft!!.pairs.map { it.term }) }

@@ -345,7 +345,7 @@ fun VocabApp(model: VocabViewModel, themeMode: ThemeMode, onThemeChange: (ThemeM
             else if (detailWord != null) detailWordId = null
             else if (showGlobalSearch) showGlobalSearch = false
             else if (selectedId != null) model.selectDeck(null)
-            else if (currentTab == MainTab.LIBRARY && libraryFolderId != null) libraryFolderId = null
+            else if (currentTab == MainTab.LIBRARY && libraryFolderId != null) libraryFolderId = libraryFolder?.parentId
             else if (currentTab == MainTab.LIBRARY && libraryArchived) closeArchive()
             else currentTab = MainTab.LEARN
         }
@@ -426,7 +426,7 @@ fun VocabApp(model: VocabViewModel, themeMode: ThemeMode, onThemeChange: (ThemeM
                             else if (state.summary != null) model.closeSummary()
                             else if (detailWord != null) detailWordId = null
                             else if (showGlobalSearch) showGlobalSearch = false
-                            else if (selectedId == null && libraryFolderId != null) libraryFolderId = null
+                            else if (selectedId == null && libraryFolderId != null) libraryFolderId = libraryFolder?.parentId
                             else if (selectedId == null && libraryArchived) closeArchive()
                             else model.selectDeck(null)
                         },
@@ -569,7 +569,10 @@ fun VocabApp(model: VocabViewModel, themeMode: ThemeMode, onThemeChange: (ThemeM
                     }
                 }
                 showGlobalSearch -> GlobalSearchScreen(decks, locked, folders = folders,
-                    onOpenFolder = { folderId -> libraryFolderId = folderId; showGlobalSearch = false },
+                    onOpenFolder = { folderId ->
+                        libraryFolderId = folderId; libraryArchived = folders.firstOrNull { it.id == folderId }?.isArchived == true
+                        showGlobalSearch = false
+                    },
                     onOpenDeck = { deck ->
                         libraryFolderId = deck.folderId; libraryArchived = deck.isArchived
                         showGlobalSearch = false; model.selectDeck(deck.id)
@@ -798,16 +801,17 @@ fun VocabApp(model: VocabViewModel, themeMode: ThemeMode, onThemeChange: (ThemeM
         onCsv = { showLibraryAdd = false; csvImportLauncher.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain")) },
         onRestore = { showLibraryAdd = false; fullImportLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) })
     val renamingFolder = folders.firstOrNull { it.id == renameFolderId }
-    if (showFolderDialog || renamingFolder != null) FolderNameDialog(renamingFolder, folders, locked,
+    if (showFolderDialog || renamingFolder != null) FolderNameDialog(renamingFolder,
+        folders.filter { !it.isArchived && it.parentId == (if (renamingFolder != null) renamingFolder.parentId else libraryFolderId) }, locked,
         onDismiss = { showFolderDialog = false; renameFolderId = null },
         onSave = { name ->
             val close = { showFolderDialog = false; renameFolderId = null }
-            if (renamingFolder == null) model.createFolder(name) { libraryFolderId = null; close() }
+            if (renamingFolder == null) model.createFolder(name, libraryFolderId, close)
             else model.renameFolderById(renamingFolder.id, name, close)
         })
     folders.firstOrNull { it.id == deleteFolderId }?.let { folder -> ConfirmDialog(
         title = "Ordner löschen?",
-        text = "„${folder.name}“ wird gelöscht. Alle Listen darin, einschließlich archivierter Listen, bleiben mit ihren Wörtern und Lernständen unter „Ohne Ordner“ erhalten.",
+        text = "„${folder.name}“ wird gelöscht. Auch seine Unterordner werden gelöscht. Die Listen daraus bleiben mit ihren Wörtern und Lernständen unter „Ohne Ordner“ erhalten. Das Archiv bleibt unverändert.",
         confirmLabel = "Ordner löschen", onDismiss = { deleteFolderId = null },
         onConfirm = { model.deleteFolder(folder.id) {
             if (libraryFolderId == folder.id) libraryFolderId = null

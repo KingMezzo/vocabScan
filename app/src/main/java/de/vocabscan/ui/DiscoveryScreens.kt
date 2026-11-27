@@ -60,7 +60,8 @@ fun GlobalSearchScreen(decks: List<DeckWithVocabulary>, busy: Boolean,
             }
         }
         items(folderMatches, key = { "folder-${it.id}" }) { folder ->
-            ListItem(headlineContent = { Text(folder.name) }, supportingContent = { Text("Ordner") },
+            ListItem(headlineContent = { Text(folder.name) }, supportingContent = { Text((if (folder.isArchived) "Archiv · " else "Bibliothek · ") +
+                de.vocabscan.data.folderPath(folders, folder.id).joinToString(" / ") { it.name }) },
                 modifier = Modifier.clickable(enabled = !busy) { onOpenFolder(folder.id) })
         }
         items(deckMatches, key = { "deck-${it.deck.id}" }) { data ->

@@ -53,7 +53,7 @@ object CsvCodec {
                 fields.getOrElse(15) { if (fields.getOrNull(14) == "LERNKARTEN") "" else "de" }).also {
                 require(it.deck.isNotBlank() && it.type.acceptsLanguages(it.language, it.targetLanguage)) { "Ungültige Liste" }
                 require(it.term.isBlank() == it.translation.isBlank()) { "Unvollständige Karte" }
-                require(it.folder.length <= 80) { "Ordnername ist zu lang" }
+                require(it.folder.length <= 2048 && it.folder.split('/').all { part -> part.length <= 80 }) { "Ordnername ist zu lang" }
             }
         }
     }

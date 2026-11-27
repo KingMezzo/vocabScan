@@ -22,17 +22,20 @@ fun LibraryScreen(
     onRenameFolder: (Folder) -> Unit, onDeleteFolder: (Folder) -> Unit, onShowActive: () -> Unit,
     onOpenArchive: () -> Unit = {}, loading: Boolean = false, failed: Boolean = false, onRetry: () -> Unit = {},
 ) {
-    val currentFolder = folders.firstOrNull { it.id == folderId }
+    val scopedFolders = folders.filter { it.isArchived == archived }
+    val currentFolder = scopedFolders.firstOrNull { it.id == folderId }
     val visibleDecks = decks.filter { it.deck.isArchived == archived && it.deck.folderId == folderId }
         .sortedBy { it.deck.name.lowercase(java.util.Locale.ROOT) }
     val archiveDecks = decks.filter { it.deck.isArchived }
-    val visibleFolders = folders.filter { folder -> !archived || archiveDecks.any { it.deck.folderId == folder.id } }
+    val visibleFolders = scopedFolders.filter { it.parentId == folderId }
     LazyColumn(Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 112.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Text(currentFolder?.name ?: if (archived) "Archiv" else "Bibliothek", style = MaterialTheme.typography.headlineLarge,
                 modifier = Modifier.padding(bottom = 8.dp).semantics { heading() })
+            if (currentFolder?.parentId != null) Text(folderPath(scopedFolders, currentFolder.id).joinToString(" / ") { it.name },
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (archived) {
                 Text(if (folderId == null) "Deine pausierten Listen. Karten und Lernstände bleiben erhalten."
                     else "Archiv · ${currentFolder?.name.orEmpty()}",
@@ -58,23 +61,22 @@ fun LibraryScreen(
                 "Wenn du eine Liste pausierst, findest du sie hier. Du kannst sie jederzeit wieder aktivieren.", "Zur Bibliothek", onShowActive) }
             return@LazyColumn
         }
-        if (folderId == null) {
-            if (!archived || visibleFolders.isNotEmpty()) item { LibrarySection("Ordner") }
-            if (!archived && folders.isEmpty()) item {
-                Text("Noch keine Ordner. Über + kannst du deine Listen ordnen.",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 8.dp))
-            }
-            items(visibleFolders, key = { "folder-${it.id}" }) { folder ->
-                // Counts describe the visible archive scope, matching the folder's contents.
-                val contents = decks.filter { it.deck.folderId == folder.id && it.deck.isArchived == archived }
-                FolderRow(folder, contents.size, contents.sumOf { it.words.size }, busy,
-                    onOpen = { onFolder(folder.id) }, onRename = { onRenameFolder(folder) }, onDelete = { onDeleteFolder(folder) },
-                    showManagement = !archived)
-            }
-            if (!archived || visibleDecks.isNotEmpty()) item { LibrarySection("Ohne Ordner") }
+        if (visibleFolders.isNotEmpty() || folderId == null && !archived) item { LibrarySection(if (folderId == null) "Ordner" else "Unterordner") }
+        if (!archived && folderId == null && scopedFolders.isEmpty()) item {
+            Text("Noch keine Ordner. Über + kannst du deine Listen ordnen.",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 8.dp))
         }
-        if (visibleDecks.isEmpty() && (!archived || folderId != null)) item {
+        items(visibleFolders, key = { "folder-${it.id}" }) { folder ->
+            // Counts describe the visible archive scope, matching the folder's contents.
+            val contents = decks.filter { data -> data.deck.isArchived == archived &&
+                folderPath(scopedFolders, data.deck.folderId).any { it.id == folder.id } }
+            FolderRow(folder, contents.size, contents.sumOf { it.words.size }, busy,
+                onOpen = { onFolder(folder.id) }, onRename = { onRenameFolder(folder) }, onDelete = { onDeleteFolder(folder) },
+                showManagement = !archived)
+        }
+        if (folderId == null && (!archived || visibleDecks.isNotEmpty())) item { LibrarySection("Ohne Ordner") }
+        if (visibleDecks.isEmpty() && visibleFolders.isEmpty() && (!archived || folderId != null)) item {
             val title = when {
                 archived -> "Keine archivierten Listen in diesem Ordner"
                 folderId != null -> "Dieser Ordner ist noch leer"
