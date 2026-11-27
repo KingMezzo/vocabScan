@@ -60,7 +60,7 @@ class LibraryNavigationTest {
         val folderId = runBlocking {
             repository.createFolder("Schule").also { id ->
                 repository.moveDeck(deckId, id)
-                repository.moveDeck(repository.fullSnapshot().decks.first { it.isArchived }.id, id)
+                repository.setDeckFolder(repository.fullSnapshot().decks.first { it.isArchived }.id, "Schule")
             }
         }
         compose.waitUntil(10_000) { model.folders.value.any { it.id == folderId } }
@@ -129,12 +129,12 @@ class LibraryNavigationTest {
     }
 
     @Test fun homeShowsOnlyTheNextRoundAndStartsExactlyTenCards() {
-        compose.onNodeWithText("10 Karten fällig").assertIsDisplayed()
+        compose.onNodeWithText("10 Karten · aus deinen aktiven Listen").assertIsDisplayed()
         compose.onNodeWithText("Reisewörter").assertDoesNotExist()
         compose.onNodeWithText("24 Übersetzungen", substring = true).assertDoesNotExist()
         compose.onNodeWithContentDescription("Bibliothek durchsuchen").assertDoesNotExist()
         compose.onNodeWithContentDescription("Zur Bibliothek hinzufügen").assertDoesNotExist()
-        compose.onNodeWithText("Lernrunde anpassen").assertDoesNotExist()
+        compose.onNodeWithText("Runde anpassen").assertIsDisplayed()
         compose.onNodeWithText("Jetzt lernen").performClick()
         compose.waitUntil(10_000) { model.state.value.session != null }
         compose.runOnIdle {

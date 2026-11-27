@@ -130,8 +130,8 @@ class VocabViewModel(
         selectDeck(repository.createDeck(name, language, folderId, type, targetLanguage))
         onSaved()
     }
-    fun createFolder(name: String, onSaved: () -> Unit = {}) = operation {
-        repository.createFolder(name)
+    fun createFolder(name: String, parentId: String? = null, onSaved: () -> Unit = {}) = operation {
+        repository.createFolder(name, parentId)
         onSaved()
     }
     fun renameFolderById(id: String, name: String, onSaved: () -> Unit = {}) = operation {

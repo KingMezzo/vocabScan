@@ -157,7 +157,7 @@ fun InsightsScreen(stats: LearningStats, logs: List<ReviewLog>, dailyGoal: Int) 
             }
         }
         item {
-            Text("Die Statistik umfasst deine vorhandenen Listen. Jede Bewertung zählt, auch wiederholte Versuche.",
+            Text("Die Statistik umfasst aktive Listen. Im Lernkalender und Wochenfortschritt bleiben auch frühere Wiederholungen archivierter Listen erhalten.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

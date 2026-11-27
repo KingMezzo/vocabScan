@@ -43,7 +43,9 @@ fun DeckManagementSheet(deck: Deck, decks: List<Deck>, folders: List<Folder>, bu
                 "move" -> {
                     Text("Wähle den Zielordner. Karten und Lernstände bleiben erhalten.",
                         style = MaterialTheme.typography.bodyMedium)
-                    (listOf<Pair<String?, String>>(null to "Ohne Ordner") + folders.map { it.id to it.name }).forEach { (id, label) ->
+                    (listOf<Pair<String?, String>>(null to "Ohne Ordner") + folders.filter { it.isArchived == deck.isArchived }.map { folder ->
+                        folder.id to de.vocabscan.data.folderPath(folders, folder.id).joinToString(" / ") { it.name }
+                    }).forEach { (id, label) ->
                         Surface(onClick = { folderId = id }, enabled = !busy, shape = MaterialTheme.shapes.medium,
                             modifier = Modifier.semantics { role = Role.RadioButton; selected = folderId == id },
                             color = if (folderId == id) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface) {
@@ -113,13 +115,13 @@ fun FolderNameDialog(initial: Folder?, folders: List<Folder>, busy: Boolean, onD
     onSave: (String) -> Unit) {
     var name by rememberSaveable(initial?.id) { mutableStateOf(initial?.name.orEmpty()) }
     val duplicate = folders.any { it.id != initial?.id && it.name.equals(name.trim(), ignoreCase = true) }
-    val invalid = name.trim().length > 80 || duplicate
+    val invalid = name.trim().length > 80 || '/' in name || duplicate
     AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text(if (initial == null) "Neuer Ordner" else "Ordner umbenennen") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedTextField(name, { name = it }, label = { Text("Ordnername") }, singleLine = true,
                 enabled = !busy, isError = invalid, supportingText = {
                     if (duplicate) Text("Dieser Ordner existiert bereits.")
-                    else if (invalid) Text("Höchstens 80 Zeichen.")
+                    else if (invalid) Text("Höchstens 80 Zeichen, ohne /.")
                 }, modifier = Modifier.fillMaxWidth())
         }
     }, confirmButton = { TextButton(onClick = { onSave(name.trim()) }, enabled = !busy && name.isNotBlank() && !invalid) {

@@ -141,7 +141,7 @@ fun PairCorrectionSheet(
                 }
                 HorizontalDivider(Modifier.padding(top = 8.dp))
                 TextButton(enabled = !busy, onClick = { onSave(term, translation); onMerge() }) {
-                    Icon(Icons.AutoMirrored.Outlined.MergeType, null); Spacer(Modifier.width(8.dp)); Text("Mit anderer Zeile verbinden")
+                    Icon(Icons.AutoMirrored.Outlined.MergeType, null); Spacer(Modifier.width(8.dp)); Text("Mit anderer Zeile zusammenführen")
                 }
                 TextButton(enabled = !busy, onClick = onRemove, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
                     Icon(Icons.Outlined.DeleteOutline, null); Spacer(Modifier.width(8.dp)); Text("Zeile entfernen")

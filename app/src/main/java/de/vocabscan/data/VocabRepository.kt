@@ -46,10 +46,13 @@ class VocabRepository(private val database: VocabDatabase) {
     suspend fun restoreFull(snapshot: FullSnapshot) = database.withTransaction {
         dao.deleteAllDecks()
         dao.deleteAllFolders()
-        snapshot.folders.forEach { dao.insertFolder(it) }
+        snapshot.folders.forEach { dao.insertFolder(it.copy(parentId = null)) }
+        snapshot.folders.filter { it.parentId != null }.forEach { dao.updateFolder(it) }
         snapshot.decks.forEach { deck ->
-            val folder = deck.folderId?.let { dao.folderById(it) } ?: folderForName(deck.folder)
-            dao.insertDeck(deck.copy(folderId = folder?.id, folder = folder?.name.orEmpty()))
+            val original = deck.folderId?.let { dao.folderById(it) }
+            val folder = if (original != null) folderInScope(original.id, deck.isArchived)
+                else folderForPath(deck.folder, deck.isArchived)
+            dao.insertDeck(deck.copy(folderId = folder?.id, folder = pathName(folder?.id)))
         }
         dao.insertWords(snapshot.words)
         dao.insertProgress(snapshot.progress)
@@ -91,11 +94,14 @@ class VocabRepository(private val database: VocabDatabase) {
                     val match = if (row.deckId.isNotBlank()) existing[row.deckId]
                         else existing.values.firstOrNull { it.name == row.deck && it.language == row.language && it.targetLanguage == row.targetLanguage && it.type == row.type }
                     require(match == null || (match.language == row.language && match.targetLanguage == row.targetLanguage && match.type == row.type)) { "Typ- oder Sprachkonflikt beim Import" }
-                    val target = match ?: Deck(
-                        id = row.deckId.ifBlank { UUID.randomUUID().toString() },
-                        name = row.deck, language = row.language, targetLanguage = row.targetLanguage, type = row.type, isArchived = row.isArchived,
-                        folder = folderForName(row.folder)?.name.orEmpty(), folderId = folderForName(row.folder)?.id,
-                    ).also { dao.insertDeck(it); existing[it.id] = it; newDecks++ }
+                    val target = match ?: run {
+                        val folder = folderForPath(row.folder, row.isArchived)
+                        Deck(
+                            id = row.deckId.ifBlank { UUID.randomUUID().toString() },
+                            name = row.deck, language = row.language, targetLanguage = row.targetLanguage, type = row.type, isArchived = row.isArchived,
+                            folder = pathName(folder?.id), folderId = folder?.id,
+                        ).also { dao.insertDeck(it); existing[it.id] = it; newDecks++ }
+                    }
                     sourceIds[sourceKey] = target.id
                     target.id
                 }
@@ -121,8 +127,9 @@ class VocabRepository(private val database: VocabDatabase) {
         require(name.isNotBlank())
         val id = UUID.randomUUID().toString()
         val folder = folderId?.let { dao.folderById(it) ?: error("Ordner nicht gefunden") }
+        require(folder?.isArchived != true) { "Wähle einen Ordner in der Bibliothek." }
         dao.insertDeck(Deck(id, name.trim(), if (type.isFlashcards) "" else language.code, type = type,
-            targetLanguage = if (type.isFlashcards) "" else targetLanguage.code, folderId = folder?.id, folder = folder?.name.orEmpty()))
+            targetLanguage = if (type.isFlashcards) "" else targetLanguage.code, folderId = folder?.id, folder = pathName(folder?.id)))
         id
     }
 
@@ -134,66 +141,107 @@ class VocabRepository(private val database: VocabDatabase) {
 
     suspend fun setDeckFolder(deckId: String, folder: String) = database.withTransaction {
         val current = dao.deckById(deckId) ?: error("Liste nicht gefunden")
-        val target = folderForName(folder)
-        dao.updateDeck(current.copy(folderId = target?.id, folder = target?.name.orEmpty()))
+        val target = folderForPath(folder, current.isArchived)
+        dao.updateDeck(current.copy(folderId = target?.id, folder = pathName(target?.id)))
     }
 
-    private suspend fun folderForName(value: String): Folder? {
+    private suspend fun pathName(id: String?) = folderPath(dao.allFolders(), id).joinToString("/") { it.name }
+
+    private suspend fun folderForName(value: String, archived: Boolean, parentId: String? = null): Folder? {
         val name = value.trim()
         require(name.length <= 80) { "Ordnernamen dürfen höchstens 80 Zeichen enthalten." }
         if (name.isEmpty()) return null
-        return dao.allFolders().firstOrNull { it.name.equals(name, ignoreCase = true) }
-            ?: Folder(UUID.randomUUID().toString(), name).also { dao.insertFolder(it) }
+        return dao.allFolders().firstOrNull {
+            it.isArchived == archived && it.parentId == parentId && it.name.equals(name, ignoreCase = true)
+        } ?: Folder(UUID.randomUUID().toString(), name, isArchived = archived, parentId = parentId)
+            .also { dao.insertFolder(it) }
     }
 
-    suspend fun createFolder(value: String): String = database.withTransaction {
+    private suspend fun folderForPath(path: String, archived: Boolean): Folder? {
+        require(path.length <= 2048) { "Ordnerpfad ist zu lang." }
+        var folder: Folder? = null
+        path.split('/').filter { it.isNotBlank() }.forEach { name ->
+            folder = folderForName(name, archived, folder?.id)
+        }
+        return folder
+    }
+
+    private suspend fun folderInScope(id: String?, archived: Boolean): Folder? {
+        val folders = dao.allFolders()
+        folders.firstOrNull { it.id == id && it.isArchived == archived }?.let { return it }
+        var target: Folder? = null
+        folderPath(folders, id).forEach { source ->
+            target = folderForName(source.name, archived, target?.id)
+        }
+        return target
+    }
+
+    suspend fun createFolder(value: String, parentId: String? = null): String = database.withTransaction {
         val name = value.trim()
-        require(name.isNotEmpty() && name.length <= 80)
-        require(dao.allFolders().none { it.name.equals(name, ignoreCase = true) }) { "Dieser Ordner existiert bereits." }
-        Folder(UUID.randomUUID().toString(), name).also { dao.insertFolder(it) }.id
+        require(name.isNotEmpty() && name.length <= 80 && '/' !in name)
+        val parent = parentId?.let { dao.folderById(it) ?: error("Ordner nicht gefunden") }
+        require(parent?.isArchived != true) { "Wähle einen Ordner in der Bibliothek." }
+        require(dao.allFolders().none { !it.isArchived && it.parentId == parentId && it.name.equals(name, ignoreCase = true) }) {
+            "Dieser Ordner existiert bereits."
+        }
+        Folder(UUID.randomUUID().toString(), name, parentId = parentId).also { dao.insertFolder(it) }.id
     }
 
     suspend fun moveDeck(deckId: String, folderId: String?) = database.withTransaction {
         val current = dao.deckById(deckId) ?: error("Liste nicht gefunden")
         val target = folderId?.let { dao.folderById(it) ?: error("Ordner nicht gefunden") }
-        dao.updateDeck(current.copy(folderId = target?.id, folder = target?.name.orEmpty()))
+        require(target == null || target.isArchived == current.isArchived) { "Ordner gehört zu einem anderen Bereich." }
+        dao.updateDeck(current.copy(folderId = target?.id, folder = pathName(target?.id)))
     }
 
     suspend fun renameFolderById(id: String, value: String) = database.withTransaction {
         val current = dao.folderById(id) ?: error("Ordner nicht gefunden")
         val name = value.trim()
-        require(name.isNotEmpty() && name.length <= 80)
-        require(dao.allFolders().none { it.id != id && it.name.equals(name, ignoreCase = true) })
+        require(name.isNotEmpty() && name.length <= 80 && '/' !in name)
+        require(dao.allFolders().none { it.id != id && it.isArchived == current.isArchived &&
+            it.parentId == current.parentId && it.name.equals(name, ignoreCase = true) })
         dao.updateFolder(current.copy(name = name))
-        dao.allDecks().filter { it.folderId == id }.forEach { dao.updateDeck(it.copy(folder = name)) }
+        val folders = dao.allFolders()
+        dao.allDecks().filter { deck -> folderPath(folders, deck.folderId).any { it.id == id } }
+            .forEach { dao.updateDeck(it.copy(folder = pathName(it.folderId))) }
     }
 
     suspend fun deleteFolder(id: String) = database.withTransaction {
         val folder = dao.folderById(id) ?: return@withTransaction
-        dao.allDecks().filter { it.folderId == id }.forEach { dao.updateDeck(it.copy(folderId = null, folder = "")) }
-        dao.deleteFolder(folder)
+        val folders = dao.allFolders()
+        val subtree = folders.filter { item -> folderPath(folders, item.id).any { it.id == folder.id } }
+        val ids = subtree.map { it.id }.toSet()
+        dao.allDecks().filter { it.folderId in ids }.forEach { dao.updateDeck(it.copy(folderId = null, folder = "")) }
+        subtree.sortedByDescending { folderPath(folders, it.id).size }.forEach { dao.deleteFolder(it) }
     }
 
     // Legacy name-based operation also supports merging old folder groups.
     suspend fun renameFolder(from: String, to: String) = database.withTransaction {
         require(from.isNotBlank())
-        val source = dao.allFolders().firstOrNull { it.name == from } ?: return@withTransaction
+        val source = dao.allFolders().firstOrNull { !it.isArchived && it.parentId == null && it.name == from } ?: return@withTransaction
         if (to.isBlank()) deleteFolder(source.id)
         else {
-            val target = dao.allFolders().firstOrNull { it.name.equals(to.trim(), ignoreCase = true) && it.id != source.id }
+            val target = dao.allFolders().firstOrNull { !it.isArchived && it.parentId == source.parentId && it.name.equals(to.trim(), ignoreCase = true) && it.id != source.id }
             if (target == null) renameFolderById(source.id, to)
             else {
                 dao.allDecks().filter { it.folderId == source.id }.forEach {
                     dao.updateDeck(it.copy(folderId = target.id, folder = target.name))
                 }
+                dao.allFolders().filter { it.parentId == source.id }.forEach { child ->
+                    require(dao.allFolders().none { it.parentId == target.id && it.name.equals(child.name, ignoreCase = true) })
+                    dao.updateFolder(child.copy(parentId = target.id))
+                }
                 dao.deleteFolder(source)
+                dao.allDecks().forEach { dao.updateDeck(it.copy(folder = pathName(it.folderId))) }
             }
         }
     }
 
     suspend fun setArchived(deckId: String, archived: Boolean) = database.withTransaction {
         val current = dao.deckById(deckId) ?: error("Liste nicht gefunden")
-        dao.updateDeck(current.copy(isArchived = archived))
+        if (current.isArchived == archived) return@withTransaction
+        val folder = folderInScope(current.folderId, archived)
+        dao.updateDeck(current.copy(isArchived = archived, folderId = folder?.id, folder = pathName(folder?.id)))
     }
 
     suspend fun deckSnapshot(deckId: String): DeletedDeck = database.withTransaction {
@@ -213,7 +261,9 @@ class VocabRepository(private val database: VocabDatabase) {
         val pageIds = source.pages.associate { it.id to UUID.randomUUID().toString() }
         val groupIds = (source.words.mapNotNull { it.scanGroupId } + source.pages.mapNotNull { it.scanGroupId })
             .distinct().associateWith { UUID.randomUUID().toString() }
-        dao.insertDeck(source.deck.copy(id = id, name = name.trim(), createdAt = now, isArchived = false))
+        val folder = folderInScope(source.deck.folderId, archived = false)
+        dao.insertDeck(source.deck.copy(id = id, name = name.trim(), createdAt = now, isArchived = false,
+            folderId = folder?.id, folder = pathName(folder?.id)))
         dao.insertWords(source.words.map { word ->
             val originalSource = ScanSource.decode(word.scanSource)
             val scanSource = originalSource?.let { scan -> pageIds[scan.pageId]?.let { scan.copy(pageId = it).encode() } }
@@ -255,7 +305,7 @@ class VocabRepository(private val database: VocabDatabase) {
 
     suspend fun restoreDeletedDeck(deleted: DeletedDeck) = database.withTransaction {
         val folder = deleted.deck.folderId?.let { dao.folderById(it) }
-        dao.insertDeck(deleted.deck.copy(folderId = folder?.id, folder = folder?.name.orEmpty()))
+        dao.insertDeck(deleted.deck.copy(folderId = folder?.id, folder = pathName(folder?.id)))
         dao.insertWords(deleted.words)
         dao.insertProgress(deleted.progress)
         dao.insertLogs(deleted.logs)
@@ -307,7 +357,8 @@ class VocabRepository(private val database: VocabDatabase) {
         require(name.isNotBlank() && type.acceptsLanguages(language, targetLanguage) && words.isNotEmpty())
         val id = UUID.randomUUID().toString()
         val folder = folderId?.let { dao.folderById(it) ?: error("Ordner nicht gefunden") }
-        dao.insertDeck(Deck(id, name, language, type = type, targetLanguage = targetLanguage, folderId = folder?.id, folder = folder?.name.orEmpty()))
+        require(folder?.isArchived != true) { "Wähle einen Ordner in der Bibliothek." }
+        dao.insertDeck(Deck(id, name, language, type = type, targetLanguage = targetLanguage, folderId = folder?.id, folder = pathName(folder?.id)))
         dao.insertWords(words.map {
             it.copy(id = UUID.randomUUID().toString(), deckId = id, createdAt = System.currentTimeMillis())
         })

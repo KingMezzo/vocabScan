@@ -41,13 +41,13 @@ internal fun ArchiveRestoreBar(busy: Boolean, onRestore: () -> Unit) {
 }
 
 private fun archivePreviewContents(): LibraryContents {
-    val folder = Folder("school", "Schule")
+    val folder = Folder("school", "Schule", isArchived = true)
     return LibraryContents(
         decks = listOf(
             DeckWithVocabulary(Deck("school-list", "Unit 1", "en", folderId = folder.id, isArchived = true), emptyList()),
             DeckWithVocabulary(Deck("travel", "Für die Reise", "fr", isArchived = true),
                 listOf(Vocabulary("word", "travel", "bonjour", "Guten Tag"))),
-        ), folders = listOf(folder, Folder("empty", "Leerer Ordner")), loading = false,
+        ), folders = listOf(folder, Folder("empty", "Leerer Ordner", isArchived = true)), loading = false,
     )
 }
 

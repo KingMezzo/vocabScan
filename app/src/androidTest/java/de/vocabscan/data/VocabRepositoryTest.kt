@@ -50,16 +50,18 @@ class VocabRepositoryTest {
         val word = database.vocabDao().wordsForDeck(deckId).single()
         repository.recordReview(word.id, StudyDirection.FOREIGN_TO_GERMAN, ReviewRating.GOOD, 1000)
         repository.setArchived(deckId, true)
+        val archiveFolderId = database.vocabDao().deckById(deckId)!!.folderId!!
+        assertNotEquals(folderId, archiveFolderId)
         repository.renameFolderById(folderId, "Prüfung")
-        assertEquals(folderId, database.vocabDao().deckById(deckId)!!.folderId)
-        assertEquals("Prüfung", database.vocabDao().deckById(deckId)!!.folder)
+        assertEquals(archiveFolderId, database.vocabDao().deckById(deckId)!!.folderId)
+        assertEquals("Schule", database.vocabDao().deckById(deckId)!!.folder)
         val snapshot = repository.fullSnapshot()
         repository.deleteFolder(emptyId)
         repository.restoreFull(snapshot)
-        assertEquals(setOf(emptyId, folderId), database.vocabDao().allFolders().map { it.id }.toSet())
-        repository.moveDeck(deckId, emptyId)
+        assertEquals(setOf(emptyId, folderId, archiveFolderId), database.vocabDao().allFolders().map { it.id }.toSet())
+        repository.deleteFolder(folderId)
         repository.deleteFolder(emptyId)
-        assertEquals(null, database.vocabDao().deckById(deckId)!!.folderId)
+        assertEquals(archiveFolderId, database.vocabDao().deckById(deckId)!!.folderId)
         assertEquals(true, database.vocabDao().deckById(deckId)!!.isArchived)
         assertEquals(1, database.vocabDao().allLogs().size)
         assertEquals(1, database.vocabDao().allProgress().size)
@@ -173,7 +175,7 @@ class VocabRepositoryTest {
         assertTrue(repository.decks.first().isEmpty())
     }
 
-    @Test fun foldersIncludeArchivedListsAndArchivesStopReminderCounts() = runTest {
+    @Test fun libraryFolderChangesLeaveArchiveAndReminderCountsIndependent() = runTest {
         val first = repository.createDeck("Unit 1", StudyLanguage.ENGLISH)
         val second = repository.createDeck("Unit 2", StudyLanguage.ENGLISH)
         repository.saveWord(first, null, "house", "Haus", "")
@@ -186,9 +188,11 @@ class VocabRepositoryTest {
         assertEquals(2, repository.dueCount(System.currentTimeMillis()))
         assertEquals(2, repository.fullSnapshot().words.size)
         repository.renameFolder("Schule", "Prüfung")
-        assertEquals(setOf("Prüfung"), database.vocabDao().allDecks().map { it.folder }.toSet())
+        assertEquals("Schule", database.vocabDao().deckById(first)!!.folder)
+        assertEquals("Prüfung", database.vocabDao().deckById(second)!!.folder)
         repository.renameFolder("Prüfung", "")
-        assertTrue(database.vocabDao().allDecks().all { it.folder.isEmpty() })
+        assertEquals("Schule", database.vocabDao().deckById(first)!!.folder)
+        assertEquals("", database.vocabDao().deckById(second)!!.folder)
         repository.setArchived(first, false)
         assertEquals(4, repository.dueCount(System.currentTimeMillis()))
     }
@@ -454,4 +458,51 @@ class VocabRepositoryTest {
             assertEquals(id, repository.fullSnapshot().decks.single().id)
         } finally { archive.delete() }
     }
+    @Test fun nestedArchivePathsSurviveLibraryDeletionRestoreAndCsv() = runTest {
+        val rootId = repository.createFolder("Schule")
+        val childId = repository.createFolder("Englisch", rootId)
+        val deckId = repository.createDeck("Unit 1", StudyLanguage.ENGLISH, childId)
+        val secondId = repository.createDeck("Unit 2", StudyLanguage.ENGLISH, childId)
+        repository.saveWord(deckId, null, "book", "Buch", "")
+        val word = database.vocabDao().wordsForDeck(deckId).single()
+        repository.recordReview(word.id, StudyDirection.FOREIGN_TO_GERMAN, ReviewRating.GOOD, 1000)
+        repository.setArchived(deckId, true)
+        repository.setArchived(secondId, true)
+        val archived = database.vocabDao().deckById(deckId)!!
+        assertNotEquals(childId, archived.folderId)
+        assertEquals(archived.folderId, database.vocabDao().deckById(secondId)!!.folderId)
+        assertEquals("Schule/Englisch", archived.folder)
+        assertTrue(folderPath(database.vocabDao().allFolders(), archived.folderId).all { it.isArchived })
+        repository.deleteFolder(rootId)
+        assertEquals(archived, database.vocabDao().deckById(deckId))
+        assertTrue(database.vocabDao().allFolders().all { it.isArchived })
+        repository.setArchived(deckId, false)
+        val restored = database.vocabDao().deckById(deckId)!!
+        assertEquals("Schule/Englisch", restored.folder)
+        assertTrue(folderPath(database.vocabDao().allFolders(), restored.folderId).none { it.isArchived })
+        assertEquals(1, repository.deckSnapshot(deckId).logs.size)
+        assertEquals(1, repository.deckSnapshot(deckId).progress.size)
+        val snapshot = repository.fullSnapshot()
+        repository.restoreFull(snapshot)
+        assertEquals(snapshot, repository.fullSnapshot())
+        val csv = repository.exportCsv()
+        repository.restoreFull(FullSnapshot(emptyList(), emptyList(), emptyList(), emptyList(), emptyList()))
+        repository.importCsv(csv)
+        val imported = database.vocabDao().allDecks()
+        assertEquals(setOf(false, true), imported.map { it.isArchived }.toSet())
+        assertTrue(imported.all { it.folder == "Schule/Englisch" })
+        assertNotEquals(imported[0].folderId, imported[1].folderId)
+    }
+
+    @Test fun cannotMoveAnActiveListIntoAnArchiveFolder() = runTest {
+        val folder = repository.createFolder("Schule")
+        val archivedId = repository.createDeck("Archiv", StudyLanguage.ENGLISH, folder)
+        val activeId = repository.createDeck("Aktiv", StudyLanguage.ENGLISH)
+        repository.setArchived(archivedId, true)
+        val archiveFolder = database.vocabDao().deckById(archivedId)!!.folderId
+        try { repository.moveDeck(activeId, archiveFolder); fail("Cross-scope move accepted") }
+        catch (_: IllegalArgumentException) { }
+        assertEquals(null, database.vocabDao().deckById(activeId)!!.folderId)
+    }
+
 }

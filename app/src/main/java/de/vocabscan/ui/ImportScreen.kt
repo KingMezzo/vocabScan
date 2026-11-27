@@ -161,8 +161,8 @@ fun ImportScreen(
                         Text("Import: ${StudyLanguage.fromCode(language).label} → ${StudyLanguage.fromCode(targetLanguage).label}. Links: Begriff. Rechts: Übersetzung / Erklärung. Ziehe einen Spaltenkopf auf den anderen oder nutze die Tauschen-Schaltfläche.",
                             style = MaterialTheme.typography.bodySmall)
                     }
-                    Text(if (dragging == null) "Text direkt in der Tabelle ändern. Über ⋮ stehen Verbinden, Trennen und Originalvergleich bereit."
-                        else if (dropTarget != null) "Loslassen, um diese Zeilen zu verbinden." else "Auf eine andere Zeile derselben Seite ziehen.",
+                    Text(if (dragging == null) "Text direkt in der Tabelle ändern. Über ⋮ kannst du versehentlich getrennte Zeilen zusammenführen, Zeilen trennen oder das Original ansehen."
+                        else if (dropTarget != null) "Loslassen, um die Zusammenführung anzusehen." else "Auf eine andere Zeile derselben Seite ziehen.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 8.dp))
                     ImportColumnHeader(language, busy, ::swapColumns, targetLanguage)
@@ -199,7 +199,7 @@ fun ImportScreen(
                         Row(Modifier.padding(vertical = 6.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (selecting) Checkbox(checked = pair.id in selectedIds, onCheckedChange = { toggleSelection(pair.id) }, enabled = !busy,
                                 modifier = Modifier.semantics { contentDescription = "Zeile $row auswählen" })
-                            else Icon(Icons.Outlined.DragIndicator, "Zeile $row zum Verbinden ziehen",
+                            else Icon(Icons.Outlined.DragIndicator, "Zeile $row zum Zusammenführen ziehen",
                                 Modifier.size(44.dp).padding(10.dp).onGloballyPositioned { handleOrigin = it.positionInRoot() }
                                     .pointerInput(pair.id, busy) {
                                         if (!busy) detectDragGesturesAfterLongPress(
@@ -268,21 +268,31 @@ fun ImportScreen(
     } }
     mergeSource?.let { id ->
         val source = draft.pairs.firstOrNull { it.id == id }
-        AlertDialog(onDismissRequest = { mergeSource = null }, title = { Text("Mit welcher Zeile verbinden?") },
-            text = { LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                val candidates = draft.pairs.filter { it.id != id && it.page == source?.page }
-                if (candidates.isEmpty()) item { Text("Keine weitere Zeile auf dieser Seite.") }
-                itemsIndexed(candidates) { _, pair -> TextButton(onClick = { pendingMerge = id to pair.id; mergeSource = null }) {
-                    Text("${pair.term}  ·  ${pair.translation}")
-                } }
-            } }, confirmButton = { TextButton(onClick = { mergeSource = null }) { Text("Abbrechen") } })
+        AlertDialog(onDismissRequest = { mergeSource = null }, title = { Text("Zweite Zeile auswählen") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Hat der Scan ein Wortpaar auf zwei Zeilen verteilt? Führe sie zu einem Wortpaar zusammen: links mit links, rechts mit rechts.")
+                Text("Ausgewählt: ${source?.term.orEmpty()} ↔ ${source?.translation.orEmpty()}",
+                    style = MaterialTheme.typography.bodyMedium)
+                LazyColumn(Modifier.heightIn(max = 240.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val candidates = draft.pairs.filter { it.id != id && it.page == source?.page }
+                    if (candidates.isEmpty()) item { Text("Keine weitere Zeile auf dieser Seite.") }
+                    itemsIndexed(candidates) { _, pair -> OutlinedCard(
+                        onClick = { pendingMerge = id to pair.id; mergeSource = null }, enabled = !busy,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Zeile ${draft.pairs.indexOf(pair) + 1}", style = MaterialTheme.typography.labelMedium)
+                            WordPairText(pair.term.ifBlank { "Begriff fehlt" }, pair.translation.ifBlank { "Übersetzung fehlt" })
+                        }
+                    } }
+                }
+            } }, confirmButton = {}, dismissButton = {
+                TextButton(onClick = { mergeSource = null }) { Text("Abbrechen") }
+            })
     }
     pendingMerge?.let { ids ->
-        val pairs = draft.pairs.filter { it.id == ids.first || it.id == ids.second }
-        AlertDialog(onDismissRequest = { pendingMerge = null }, title = { Text("Zeilen verbinden?") },
-            text = { Text(pairs.joinToString("\n+\n") { "${it.term}  ↔  ${it.translation}" } + "\n\nDie Reihenfolge auf der Seite bleibt erhalten.") },
-            confirmButton = { TextButton(enabled = !busy, onClick = { onMerge(ids.first, ids.second); pendingMerge = null }) { Text("Verbinden") } },
-            dismissButton = { TextButton(onClick = { pendingMerge = null }) { Text("Abbrechen") } })
+        MergeRowsDialog(draft.pairs, ids.first, ids.second, language, targetLanguage, busy,
+            onDismiss = { pendingMerge = null },
+            onConfirm = { onMerge(ids.first, ids.second); pendingMerge = null })
     }
     original?.let { OriginalImageDialog(it, onDismiss = { original = null }) }
 }

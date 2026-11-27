@@ -111,7 +111,7 @@ class LanguagePairRepositoryTest {
             old.version = 10
         }
         val migrated = Room.databaseBuilder(context, VocabDatabase::class.java, name)
-            .addMigrations(VocabDatabase.MIGRATION_10_11).build()
+            .addMigrations(VocabDatabase.MIGRATION_10_11, VocabDatabase.MIGRATION_11_12).build()
         try {
             val snapshot = VocabRepository(migrated).fullSnapshot()
             assertEquals("de", snapshot.decks.first { it.id == "en" }.targetLanguage)

@@ -210,10 +210,9 @@ class AppFlowTest {
         }
         try {
             compose.waitUntil(10_000) {
-                compose.onAllNodesWithContentDescription("Lernoptionen").fetchSemanticsNodes().isNotEmpty()
+                compose.onAllNodesWithText("Runde anpassen").fetchSemanticsNodes().isNotEmpty()
             }
-            compose.onNodeWithContentDescription("Lernoptionen").performClick()
-            compose.onNodeWithText("Lernrunde anpassen").performClick()
+            compose.onNodeWithText("Runde anpassen").performClick()
             compose.onNodeWithText("Alle Tags").performScrollTo().performClick()
             compose.onNodeWithText(marker).performClick()
             compose.onNodeWithText("Lernrunde starten").performScrollTo().performClick()

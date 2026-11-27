@@ -39,13 +39,31 @@ class UiPolishTest {
         compose.onNodeWithContentDescription("Lernoptionen").assertDoesNotExist()
     }
 
+    @Test fun firstListActionOpensCreationDirectly() {
+        var creating = false
+        compose.setContent { VocabTheme(ThemeMode.LIGHT) {
+            LearnScreen(0, false, false, 0, 10, {}, {}, {}, onCreate = { creating = true })
+        } }
+        compose.onNodeWithText("Deine erste Liste anlegen").performClick()
+        compose.runOnIdle { assertTrue(creating) }
+    }
+
+    @Test fun loadingDoesNotShowAnEmptyLibraryOrLearningAction() {
+        compose.setContent { VocabTheme(ThemeMode.DARK) {
+            LearnScreen(0, false, false, 0, 10, {}, {}, {}, loading = true)
+        } }
+        compose.onNodeWithText("Deine Lernrunde wird vorbereitet …").assertIsDisplayed()
+        compose.onNodeWithText("Deine erste Liste anlegen").assertDoesNotExist()
+        compose.onNodeWithText("Jetzt lernen").assertDoesNotExist()
+    }
+
     @Test fun completedLearningStateAllowsFreePractice() {
         var openedPractice = false
         compose.setContent { VocabTheme(ThemeMode.DARK) {
             LearnScreen(0, true, false, 10, 10, {}, { openedPractice = true }, {})
         } }
-        compose.onNodeWithText("Nichts fällig").assertIsDisplayed()
-        compose.onNodeWithText("Frei üben").performClick()
+        compose.onNodeWithText("Für jetzt ist alles erledigt").assertIsDisplayed()
+        compose.onNodeWithText("Übungsrunde zusammenstellen").performClick()
         compose.runOnIdle { assertTrue(openedPractice) }
     }
 
