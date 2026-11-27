@@ -1,0 +1,9 @@
+{
+  "versionCode": 18,
+  "versionName": "1.0.2",
+  "changelog": [
+    "Latein als Lernsprache auf beiden Seiten einer Sprachliste wählen – auch Latein zu Latein.",
+    "Lateinische Vokabeln lernen, scannen und per CSV, QR-Code oder vollständiger Sicherung austauschen.",
+    "Die Sprachauswahl lässt sich auch bei großer Schrift vollständig durchblättern."
+  ]
+}

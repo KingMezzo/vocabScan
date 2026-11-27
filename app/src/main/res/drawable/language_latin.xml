@@ -1,0 +1,7 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="32dp"
+    android:viewportWidth="60" android:viewportHeight="40">
+    <!-- Classical temple emblem: Latin has no national flag. -->
+    <path android:fillColor="#722F37" android:pathData="M0,0H60V40H0Z" />
+    <path android:fillColor="#F2D58A" android:pathData="M30,5L9,15H51ZM12,17H48V20H12ZM15,22H21V31H15ZM27,22H33V31H27ZM39,22H45V31H39ZM11,33H49V36H11Z" />
+</vector>

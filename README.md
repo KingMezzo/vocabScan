@@ -105,3 +105,10 @@ Voraussetzung: **Android 8.0+**. Updates ebenfalls über Releases, einfach über
 ## 💬 Feedback
 
 **Issue** im Repository erstellen, am besten mit Android-Version und kurzer Beschreibung der Schritte. Bei Scanner-Problemen gern einen anonymisierten Ausschnitt des Arbeitsblatts anhängen.
+
+## Entwicklung
+
+Android-Projekt mit Kotlin, Jetpack Compose und Material 3. Build-Voraussetzungen,
+lokale Prüfungen und die vorhandenen GitHub Actions sind in [RELEASE.md](RELEASE.md)
+beschrieben. **VocabScan DEV** ist parallel zur Release-App installierbar; Releases
+werden ausschließlich im eingerichteten GitHub-Workflow signiert.
