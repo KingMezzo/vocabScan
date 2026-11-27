@@ -1,0 +1,155 @@
+name: Android Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Unsigned APK
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          cache-disabled: true
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@138b5fb1cf087fdb4c5f3c621466fe304d0cf2e3
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+
+      - name: Make Gradle executable
+        run: chmod +x gradlew
+
+      - name: Build unsigned APK
+        run: |
+          ./gradlew assembleRelease \
+            -PunsignedRelease=true \
+            --no-daemon \
+            --no-build-cache
+
+      - name: Upload unsigned APK
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: unsigned-apk
+          path: app/build/outputs/apk/release/*-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  sign:
+    name: Sign APK
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@138b5fb1cf087fdb4c5f3c621466fe304d0cf2e3
+        with:
+          packages: "platform-tools build-tools;36.0.0"
+
+      - name: Download unsigned APK
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: unsigned-apk
+          path: unsigned
+
+      - name: Align APK
+        shell: bash
+        run: |
+          shopt -s nullglob
+          APK_FILES=(unsigned/*.apk)
+
+          [[ "${#APK_FILES[@]}" -eq 1 ]]
+
+          mkdir -p signed
+
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" \
+            -P 16 -f -v 4 \
+            "${APK_FILES[0]}" \
+            aligned.apk
+
+      - name: Sign APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        shell: bash
+        run: |
+          umask 077
+
+          KEYSTORE="$RUNNER_TEMP/release.jks"
+
+          trap 'rm -f "$KEYSTORE"' EXIT
+
+          [[ -n "$KEYSTORE_BASE64" ]]
+          [[ -n "$KEYSTORE_PASSWORD" ]]
+          [[ -n "$KEY_ALIAS" ]]
+          [[ -n "$KEY_PASSWORD" ]]
+
+          printf '%s' "$KEYSTORE_BASE64" \
+            | base64 --decode > "$KEYSTORE"
+
+          unset KEYSTORE_BASE64
+
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign \
+            --ks "$KEYSTORE" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:KEYSTORE_PASSWORD \
+            --key-pass env:KEY_PASSWORD \
+            --out signed/vocabscan.apk \
+            aligned.apk
+
+      - name: Verify signature
+        run: |
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify \
+            --verbose \
+            --print-certs \
+            signed/vocabscan.apk
+
+      - name: Generate checksum
+        run: |
+          cd signed
+          sha256sum vocabscan.apk > vocabscan.apk.sha256
+
+      - name: Upload signed APK
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: vocabScan-release
+          path: signed/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/release.jks"
+          rm -f aligned.apk
