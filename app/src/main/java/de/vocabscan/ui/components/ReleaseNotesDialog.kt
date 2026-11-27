@@ -5,9 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,36 +32,37 @@ fun ReleaseNotesDialog(
     actionEnabled: Boolean = true,
     statusContent: (@Composable () -> Unit)? = null,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    val maxHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.85f).dp
+    val markdown = androidx.compose.runtime.remember(notes.changelog) { releaseNotesMarkdown(notes.changelog) }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        androidx.compose.material3.Surface(
+            modifier = Modifier.padding(horizontal = 24.dp).widthIn(max = 560.dp).fillMaxWidth().heightIn(max = maxHeight),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ) {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(title, style = MaterialTheme.typography.headlineSmall)
+                statusContent?.invoke()
                 Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("Version ${notes.versionName}", style = MaterialTheme.typography.titleMedium)
-                    if (notes.changelog.isEmpty()) {
+                    if (markdown.isBlank()) {
                         Text("Für diese Version sind keine weiteren Details hinterlegt.",
                             style = MaterialTheme.typography.bodyMedium)
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            notes.changelog.forEach { entry ->
-                                Text("• $entry", style = MaterialTheme.typography.bodyMedium)
-                            }
-                        }
-                    }
+                    } else MarkdownContent(markdown)
                 }
-                statusContent?.invoke()
+                androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, androidx.compose.ui.Alignment.End),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    dismissLabel?.let { label ->
+                        TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+                    }
+                    Button(onClick = onAction, enabled = actionEnabled, modifier = Modifier.heightIn(min = 48.dp)) { Text(actionLabel) }
+                }
             }
-        },
-        confirmButton = {
-            Button(onClick = onAction, enabled = actionEnabled, modifier = Modifier.heightIn(min = 48.dp)) { Text(actionLabel) }
-        },
-        dismissButton = dismissLabel?.let { label -> {
-            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
-        } },
-    )
+        }
+    }
 }
 
 @Composable
@@ -161,4 +163,16 @@ private val previewNotes = ReleaseNotes(15, "0.13.0", listOf(
 @Preview(name = "Was ist neu · Leer", showBackground = true)
 @Composable private fun WhatsNewEmptyPreview() = VocabTheme(ThemeMode.LIGHT) {
     ReleaseNotesDialog("Was ist neu", previewNotes.copy(changelog = emptyList()), "Alles klar", {}, {})
+}
+
+@Preview(name = "Markdown · Lange Notizen", showBackground = true, widthDp = 360, heightDp = 640)
+@Composable private fun MarkdownNotesPreview() = VocabTheme(ThemeMode.LIGHT) {
+    ReleaseNotesDialog("Was ist neu", previewNotes.copy(changelog = listOf(
+        "## Verbesserungen\n\n- **Ordner** getrennt verwalten\n- *Schneller* lernen\n\n### Details\n\n" +
+            List(12) { "- Weitere Verbesserung ${it + 1}" }.joinToString("\n"))), "Alles klar", {}, {})
+}
+@Preview(name = "Markdown · Große Schrift", showBackground = true, widthDp = 320, heightDp = 480, fontScale = 2f)
+@Composable private fun MarkdownLargeFontPreview() = VocabTheme(ThemeMode.DARK) {
+    UpdateDialog(previewNotes.copy(changelog = listOf("## Neu\n\n**Besser lernen**\n\n" +
+        List(20) { "- Änderung ${it + 1}" }.joinToString("\n"))), false, 0f, false, null, {}, {}, {})
 }

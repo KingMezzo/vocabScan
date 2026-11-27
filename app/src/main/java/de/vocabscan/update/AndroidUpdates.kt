@@ -100,8 +100,7 @@ class AndroidUpdates(context: Context) {
             val digest = apk.optString("digest").takeIf { it.isNotBlank() && it != "null" }
             require(digest == null || Regex("sha256:[a-fA-F0-9]{64}").matches(digest))
             val changelog = json.optString("body", "").takeUnless { it == "null" }.orEmpty()
-                .lineSequence().map { it.trim().removePrefix("- ").removePrefix("* ") }
-                .filter { it.isNotBlank() }.toList()
+                .takeIf { it.isNotBlank() }?.let { listOf(it) }.orEmpty()
             // GitHub has no Android versionCode; the downloaded APK is checked before installation.
             val notes = ReleaseNotes(0, tag.removePrefix("v").removePrefix("V"), changelog)
             return AvailableUpdate(notes, url, size, digest?.substringAfter(':')?.lowercase())
