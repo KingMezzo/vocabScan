@@ -672,10 +672,20 @@ fun VocabApp(model: VocabViewModel, themeMode: ThemeMode, onThemeChange: (ThemeM
                         LearningStatsCalculator.calculate(decks, progress, reviewLogs, dayTick, ZoneId.systemDefault())
                     }
                     val dueCount = remember(decks, progress, dayTick) {
-                        StudyPlanner.candidates(StudyData(decks, progress), StudyOptions(), System.currentTimeMillis()).size
+                        StudyPlanner.candidates(StudyData(decks, progress), StudyOptions(), dayTick).size
+                    }
+                    val nextReviewAt = remember(decks, progress, dayTick) {
+                        val activeIds = decks.filterNot { it.deck.isArchived }.flatMap { it.words }.map { it.id }.toSet()
+                        progress.filter { it.wordId in activeIds && it.dueAt > dayTick }.minOfOrNull { it.dueAt }
                     }
                     LearnScreen(roundSize = minOf(10, dueCount),
                         hasWords = decks.any { !it.deck.isArchived && it.words.isNotEmpty() },
+                        loading = libraryContents.loading, failed = libraryContents.failed, onRetry = model::retryLibrary,
+                        nextReviewAt = nextReviewAt, now = dayTick,
+                        onCreate = {
+                            currentTab = MainTab.LIBRARY; libraryArchived = false; libraryFolderId = null
+                            showDeckDialog = true
+                        },
                         busy = locked, todayReviews = stats.today, dailyGoal = dailyGoal,
                         onLearn = { model.startStudy(StudyOptions(limit = 10), preferredMode) },
                         onLibrary = { currentTab = MainTab.LIBRARY },
