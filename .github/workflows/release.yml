@@ -2,6 +2,11 @@ name: Android Release
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_draft:
+        description: Create GitHub release draft
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -17,11 +22,24 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
+    outputs:
+      version: ${{ steps.version.outputs.name }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*/\1/p' app/build.gradle.kts)
+
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+
+          echo "name=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Set up Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
@@ -153,3 +171,39 @@ jobs:
         run: |
           rm -f "$RUNNER_TEMP/release.jks"
           rm -f aligned.apk
+
+  release:
+    name: Create Release Draft
+    needs:
+      - build
+      - sign
+    if: inputs.publish_draft
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download signed APK
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: vocabScan-release
+          path: release-assets
+
+      - name: Create GitHub release draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+          REPO: ${{ github.repository }}
+          TARGET: ${{ github.sha }}
+        shell: bash
+        run: |
+          gh release create "v${VERSION}" \
+            --repo "$REPO" \
+            --target "$TARGET" \
+            --title "VocabScan v${VERSION}" \
+            --generate-notes \
+            --draft \
+            release-assets/vocabscan.apk \
+            release-assets/vocabscan.apk.sha256
