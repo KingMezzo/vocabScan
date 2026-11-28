@@ -20,10 +20,16 @@ class UpdateMetadataTest {
         val json = metadata()
         val update = requireNotNull(AndroidUpdates.parseUpdate(json.toString()))
         assertEquals("1.10.0", update.notes.versionName)
-        assertEquals(listOf("Neue Funktionen", "Fehler behoben"), update.notes.changelog)
+        assertEquals(listOf("- Neue Funktionen\n- Fehler behoben"), update.notes.changelog)
         assertEquals(1234L, update.sizeBytes)
         assertEquals("a".repeat(64), update.sha256)
         assertTrue(requireNotNull(AndroidUpdates.parseUpdate(json.put("body", "").toString())).notes.changelog.isEmpty())
+    }
+
+    @Test fun markdownBodyKeepsBlankLinesIndentationAndDelimiters() {
+        val markdown = "## Neu\n\n- **Ordner**\n  - Unterordner\n\n```kotlin\nval x = 1\n```"
+        val update = requireNotNull(AndroidUpdates.parseUpdate(metadata().put("body", markdown).toString()))
+        assertEquals(listOf(markdown), update.notes.changelog)
     }
 
     @Test fun draftsPrereleasesAndMissingApksAreIgnored() {

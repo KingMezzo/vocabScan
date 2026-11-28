@@ -53,7 +53,7 @@ class UpdateDialogTest {
             ReleaseNotesDialog("Update verfügbar", notes, "Herunterladen", { downloads++ }, { postponed++ }, "Später")
         } }
         compose.onNodeWithText("Version 0.14.0").assertIsDisplayed()
-        compose.onNodeWithText("• Neue Funktionen").assertIsDisplayed()
+        compose.onNodeWithText("Neue Funktionen").assertIsDisplayed()
         compose.onNodeWithText("Herunterladen").performClick()
         compose.onNodeWithText("Später").performClick()
         compose.runOnIdle {
@@ -74,6 +74,19 @@ class UpdateDialogTest {
         compose.runOnIdle { assertEquals(1, acknowledged) }
     }
 
+    @Test fun releaseNotesRenderHeadingsEmphasisAndLinksWithoutMarkdownMarkers() {
+        compose.setContent { VocabTheme(ThemeMode.LIGHT) {
+            ReleaseNotesDialog("Was ist neu", notes.copy(changelog = listOf(
+                "## Verbesserungen\n\n**Schneller** und *übersichtlicher*.\n\n[Details](https://example.org)")),
+                "Alles klar", {}, {})
+        } }
+        compose.onNodeWithText("Verbesserungen").assertIsDisplayed()
+        compose.onNodeWithText("Schneller und übersichtlicher.").assertIsDisplayed()
+        compose.onNodeWithText("Details").assertIsDisplayed()
+        compose.onNodeWithText("## Verbesserungen").assertDoesNotExist()
+        compose.onNodeWithText("Alles klar").assertIsDisplayed()
+    }
+
     @Test fun longChangelogKeepsActionsVisibleAtLargeFontSize() {
         compose.setContent { VocabTheme(ThemeMode.DARK) {
             androidx.compose.runtime.CompositionLocalProvider(
@@ -85,6 +98,6 @@ class UpdateDialogTest {
         } }
         compose.onNodeWithText("Herunterladen").assertIsDisplayed()
         compose.onNodeWithText("Später").assertIsDisplayed()
-        compose.onNodeWithText("• Änderung 29").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Änderung 29").performScrollTo().assertIsDisplayed()
     }
 }

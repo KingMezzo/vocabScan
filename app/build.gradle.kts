@@ -32,8 +32,8 @@ android {
         applicationId = "de.vocabscan"
         minSdk = 26
         targetSdk = 36
-        versionCode = 19
-        versionName = "1.1.0"
+        versionCode = 20
+        versionName = "1.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures {
@@ -73,6 +73,9 @@ dependencies {
     implementation("com.google.zxing:core:3.5.4")
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("org.commonmark:commonmark:0.32.0")
+    implementation("org.commonmark:commonmark-ext-gfm-strikethrough:0.32.0")
+    implementation("org.commonmark:commonmark-ext-gfm-tables:0.32.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
